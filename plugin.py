@@ -20,6 +20,7 @@
         </param>
         <param field="Username" label="Heatzy user / email" width="200px" required="true" default=""/>
         <param field="Password" label="Heatzy password" width="200px" required="true" default=""/>
+        <param field="Password" label="Heatzy password" width="200px" required="true" default=""/>
     </params>
 </plugin>
 """
@@ -50,6 +51,8 @@ class BasePlugin:
     __HEATZY_PILOT_PRODUCT_KEY = '9420ae048da545c88fc6274d204dd25f'
 
     __UNIT_STATE = 1
+    
+    __HEARDER = 
 
 
     # Device units
@@ -68,7 +71,7 @@ class BasePlugin:
             headers = {
                 "Content-Type": "application/json",
                 "Accept": "application/json",
-                "X-Gizwits-Application-Id": "c70a66ff039d41b4a220e198b0fcc8b3"
+                "X-Gizwits-Application-Id": __HEATZY_APPLICATION_ID
             }
             conn = http.client.HTTPSConnection(self.__API_HOST)
             conn.request("POST", "/app/login", params, headers)
@@ -84,7 +87,7 @@ class BasePlugin:
     def get_devices(self):
         headers = {
             "Accept": "application/json",
-            "X-Gizwits-Application-Id": "c70a66ff039d41b4a220e198b0fcc8b3",
+            "X-Gizwits-Application-Id": __HEATZY_APPLICATION_ID,
             "X-Gizwits-User-token": self.get_token()
         }
         conn = http.client.HTTPSConnection(self.__API_HOST)
@@ -98,7 +101,7 @@ class BasePlugin:
     def get_status(self, did):
         headers = {
             "Accept": "application/json",
-            "X-Gizwits-Application-Id": "c70a66ff039d41b4a220e198b0fcc8b3",
+            "X-Gizwits-Application-Id": __HEATZY_APPLICATION_ID,
             "X-Gizwits-User-token": self.get_token()
         }
         conn = http.client.HTTPSConnection(self.__API_HOST)
@@ -115,7 +118,7 @@ class BasePlugin:
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "X-Gizwits-Application-Id": "c70a66ff039d41b4a220e198b0fcc8b3",
+            "X-Gizwits-Application-Id": __HEATZY_APPLICATION_ID,
             "X-Gizwits-User-token": self.get_token()
         }
 
