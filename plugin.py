@@ -6,7 +6,7 @@
 # Author: Xorfor
 #
 """
-<plugin key="heatzy_pilote" name="Heatzy pilote" author="charlyhue" version="1.0.0">
+<plugin key="heatzy_pilote" name="Heatzy pilote" author="Mimouss" version="0.0.1">
     <params>
         <!--
         <param field="Address" label="IP Address" width="200px" required="true" default="127.0.0.1"/>
@@ -14,12 +14,17 @@
         -->
         <param field="Mode6" label="Debug" width="75px">
             <options>
-                <option label="True" value="Debug"/>
-                <option label="False" value="Normal" default="true"/>
+                <option label="None" value="0"  default="true" />
+                <option label="Python Only" value="2"/>
+                <option label="Basic Debugging" value="62"/>
+                <option label="Basic+Messages" value="126"/>
+                <option label="Connections Only" value="16"/>
+                <option label="Connections+Python" value="18"/>
+                <option label="Connections+Queue" value="144"/>
+                <option label="All" value="-1"/>
             </options>
         </param>
         <param field="Username" label="Heatzy user / email" width="200px" required="true" default=""/>
-        <param field="Password" label="Heatzy password" width="200px" required="true" default=""/>
         <param field="Password" label="Heatzy password" width="200px" required="true" default=""/>
     </params>
 </plugin>
@@ -36,23 +41,27 @@ class BasePlugin:
     __HEARTBEATS1MIN = 3
     __MINUTES = 1         # or use a parameter
 
-    __STATE_COMFORT = '舒适'
-    __STATE_ECO = '经济'
-    __STATE_FREEZE = '解冻'
-    __STATE_OFF = '停止'
+    #__STATE_COMFORT = '舒适'
+    #__STATE_ECO = '经济'
+    #__STATE_FREEZE = '解冻'
+    #__STATE_OFF = '停止'
 
-    __COMMAND_COMFORT = [1, 1, 0]
-    __COMMAND_ECO = [1, 1, 1]
-    __COMMAND_FREEZE = [1, 1, 2]
-    __COMMAND_OFF = [1, 1, 3]
+    __STATE_COMFORT = 'cft'
+    __STATE_ECO = 'eco'
+    __STATE_FREEZE = 'fro'
+    __STATE_OFF = 'off'
+
+    __COMMAND_COMFORT = { "mode":0  }
+    __COMMAND_ECO = { "mode":1 }
+    __COMMAND_FREEZE = { "mode":2 }
+    __COMMAND_OFF = { "mode":3 }
+
 
     __API_HOST = 'euapi.gizwits.com'
     __HEATZY_APPLICATION_ID = 'c70a66ff039d41b4a220e198b0fcc8b3'
     __HEATZY_PILOT_PRODUCT_KEY = '9420ae048da545c88fc6274d204dd25f'
 
     __UNIT_STATE = 1
-    
-    __HEARDER = 
 
 
     # Device units
@@ -71,7 +80,7 @@ class BasePlugin:
             headers = {
                 "Content-Type": "application/json",
                 "Accept": "application/json",
-                "X-Gizwits-Application-Id": __HEATZY_APPLICATION_ID
+                "X-Gizwits-Application-Id": "c70a66ff039d41b4a220e198b0fcc8b3"
             }
             conn = http.client.HTTPSConnection(self.__API_HOST)
             conn.request("POST", "/app/login", params, headers)
@@ -87,7 +96,7 @@ class BasePlugin:
     def get_devices(self):
         headers = {
             "Accept": "application/json",
-            "X-Gizwits-Application-Id": __HEATZY_APPLICATION_ID,
+            "X-Gizwits-Application-Id": "c70a66ff039d41b4a220e198b0fcc8b3",
             "X-Gizwits-User-token": self.get_token()
         }
         conn = http.client.HTTPSConnection(self.__API_HOST)
@@ -101,7 +110,7 @@ class BasePlugin:
     def get_status(self, did):
         headers = {
             "Accept": "application/json",
-            "X-Gizwits-Application-Id": __HEATZY_APPLICATION_ID,
+            "X-Gizwits-Application-Id": "c70a66ff039d41b4a220e198b0fcc8b3",
             "X-Gizwits-User-token": self.get_token()
         }
         conn = http.client.HTTPSConnection(self.__API_HOST)
@@ -114,18 +123,17 @@ class BasePlugin:
 
 
     def control(self, did, mode):
-        params = json.dumps({"raw": mode})
+        params = json.dumps({"attrs": mode})
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "X-Gizwits-Application-Id": __HEATZY_APPLICATION_ID,
+            "X-Gizwits-Application-Id": "c70a66ff039d41b4a220e198b0fcc8b3",
             "X-Gizwits-User-token": self.get_token()
         }
 
         conn = http.client.HTTPSConnection(self.__API_HOST)
         conn.request("POST", "/app/control/" + did, params, headers)
         response = conn.getresponse()
-
         return response.code == 200
 
     def get_unit(self, units):
@@ -139,10 +147,9 @@ class BasePlugin:
 
     def onStart(self):
         Domoticz.Debug("onStart called")
-        if Parameters["Mode6"] == "Debug":
-            Domoticz.Debugging(1)
-        else:
-            Domoticz.Debugging(0)
+        if Parameters["Mode6"] != "0":
+            Domoticz.Debugging(int(Parameters["Mode6"]))
+            DumpConfigToLog()
 
         Options = {"LevelActions": "||||",
                        "LevelNames": "Off|Hors gel|Eco|Confort",
@@ -157,15 +164,12 @@ class BasePlugin:
             if device['did'] not in domoticz_already_installed:
                 Domoticz.Device(Name=device['dev_alias'], Unit=self.get_unit(domoticz_already_installed_units), DeviceID=device['did'],
                                 TypeName="Selector Switch", Options=Options, Switchtype=18, Image=15).Create()
-                Domoticz.Device(Name=device['dev_alias'] + " (switch)", Unit=self.get_unit(domoticz_already_installed_units), DeviceID=device['did'],
-                                TypeName="Switch", Image=15).Create()
 
     def onStop(self):
         Domoticz.Debug("onStop called")
 
     def onConnect(self, Connection, Status, Description):
         Domoticz.Debug("onConnect called")
-
 
     def onMessage(self, Connection, Data):
         Domoticz.Debug("onMessage called")
@@ -181,28 +185,21 @@ class BasePlugin:
 
     def onCommand(self, Unit, Command, Level, Hue):
         Domoticz.Debug(Devices[1].DeviceID +
-            "onCommand called for Unit " + str(Unit) + ": Parameter '" + str(Command) + "', Level: " + str(Level))
+            " onCommand called for Unit " + str(Unit) + ": Parameter '" + str(Command) + "', Level: " + str(Level))
 
         if str(Command) == 'Set Level':
-            if Level == 10:
-                if self.control(Devices[Unit].DeviceID, self.__COMMAND_FREEZE):
-                    UpdateDevice(Unit, 1, '10')
+            if Level == 0:
+                self.control(Devices[Unit].DeviceID, self.__COMMAND_OFF)
+                UpdateDevice(Unit, 1, '0')
+            elif Level == 10:
+                self.control(Devices[Unit].DeviceID, self.__COMMAND_FREEZE)
+                UpdateDevice(Unit, 1, '10')
             elif Level == 20:
-                if self.control(Devices[Unit].DeviceID, self.__COMMAND_ECO):
-                    UpdateDevice(Unit, 1, '20')
+                self.control(Devices[Unit].DeviceID, self.__COMMAND_ECO)
+                UpdateDevice(Unit, 1, '20')
             elif Level == 30:
-                if self.control(Devices[Unit].DeviceID, self.__COMMAND_COMFORT):
-                    UpdateDevice(Unit, 1, '30')
-                    UpdateDevice(self.find_unit(Devices[Unit].DeviceID, Unit), 1, 'On')
-        elif str(Command) == "Off":
-            if self.control(Devices[Unit].DeviceID, self.__COMMAND_OFF):
-                UpdateDevice(Unit, 0, 'Off')
-                UpdateDevice(self.find_unit(Devices[Unit].DeviceID, Unit), 0, 'Off')
-        elif str(Command) == "On":
-            if self.control(Devices[Unit].DeviceID, self.__COMMAND_COMFORT):
-                UpdateDevice(Unit, 1, 'On')
-                UpdateDevice(self.find_unit(Devices[Unit].DeviceID, Unit), 1, '30')
-
+                self.control(Devices[Unit].DeviceID, self.__COMMAND_COMFORT)
+                UpdateDevice(Unit, 1, '30')
 
     def onNotification(self, Name, Subject, Text, Status, Priority, Sound, ImageFile):
         Domoticz.Debug("Notification: " + Name + "," + Subject + "," + Text + "," + Status + "," + str(
@@ -224,16 +221,16 @@ class BasePlugin:
                     already.append(on_off)
                     if status == self.__STATE_OFF:
                         UpdateDevice(domoticz_device, 0, '0')
-                        UpdateDevice(on_off, 0, 'Off')
+                        #UpdateDevice(on_off, 0, 'Off')
                     elif status == self.__STATE_FREEZE:
                         UpdateDevice(domoticz_device, 1, '10')
-                        UpdateDevice(on_off, 0, 'Off')
+                        #UpdateDevice(on_off, 0, 'Off')
                     elif status == self.__STATE_ECO:
                         UpdateDevice(domoticz_device, 1, '20')
-                        UpdateDevice(on_off, 0, 'Off')
+                        #UpdateDevice(on_off, 0, 'Off')
                     elif status == self.__STATE_COMFORT:
                         UpdateDevice(domoticz_device, 1, '30')
-                        UpdateDevice(on_off, 1, 'On')
+                        #UpdateDevice(on_off, 1, 'On')
         else:
             Domoticz.Debug("onHeartbeat called, run again in " + str(self.__runAgain) + " heartbeats.")
 
