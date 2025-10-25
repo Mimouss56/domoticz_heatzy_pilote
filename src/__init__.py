@@ -26,7 +26,10 @@ __author__ = "Mimouss56"
 
 # Make main classes available at package level
 from .models import HeatMode, HeatzyDevice, AuthToken
-from .interfaces import IHeatzyApiClient, IDomoticzService, ILogger
+from .interfaces import (
+    IHeatzyApiClient, IDomoticzService, ILogger,
+    AuthenticationError, ApiError, InitializationError, SyncError
+)
 from .api import HttpClient, HeatzyApiClient
 from .domoticz_service import DomoticzService
 from .device_manager import DeviceManager
@@ -39,6 +42,10 @@ __all__ = [
     'IHeatzyApiClient',
     'IDomoticzService',
     'ILogger',
+    'AuthenticationError',
+    'ApiError',
+    'InitializationError',
+    'SyncError',
     'HttpClient',
     'HeatzyApiClient',
     'DomoticzService',
