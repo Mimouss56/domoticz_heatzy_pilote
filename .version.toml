@@ -1,0 +1,29 @@
+# Version Configuration
+version = "1.0.0"
+
+# Semantic versioning configuration
+[semver]
+major_keywords = ["BREAKING", "breaking", "major"]
+minor_keywords = ["feat", "feature", "minor", "add"]
+patch_keywords = ["fix", "patch", "bug", "hotfix"]
+
+# Release configuration
+[release]
+pre_release_suffix = "rc"
+build_metadata = false
+
+# Files to update with version
+[[version_files]]
+file = "plugin_modular.py"
+pattern = 'version="([^"]*)"'
+replacement = 'version="{version}"'
+
+[[version_files]]
+file = "src/__init__.py"
+pattern = '__version__ = "([^"]*)"'
+replacement = '__version__ = "{version}"'
+
+[[version_files]]
+file = "CHANGELOG.md"
+pattern = "## \\[Unreleased\\]"
+replacement = "## [{version}] - {date}"

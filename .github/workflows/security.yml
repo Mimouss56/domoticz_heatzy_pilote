@@ -1,0 +1,359 @@
+name: Security and Dependencies
+
+on:
+  schedule:
+    # Run weekly on Sundays at 2 AM UTC
+    - cron: '0 2 * * 0'
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'requirements*.txt'
+      - '.github/workflows/security.yml'
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.8"
+
+jobs:
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Install security tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit safety semgrep
+        
+    - name: Run Bandit security scan
+      run: |
+        echo "🔍 Running Bandit security scan..."
+        bandit -r src/ -f json -o bandit-results.json
+        bandit -r src/ -f txt
+        
+    - name: Run Semgrep scan
+      run: |
+        echo "🔍 Running Semgrep security scan..."
+        semgrep --config=auto src/ --json -o semgrep-results.json || true
+        semgrep --config=auto src/ || true
+        
+    - name: Check for secrets
+      run: |
+        echo "🔍 Checking for potential secrets..."
+        
+        # Simple regex patterns for common secrets
+        echo "Checking for API keys..."
+        grep -r -i "api[_-]key\|apikey" src/ && echo "⚠️ Potential API key found" || echo "✅ No API keys found"
+        
+        echo "Checking for passwords..."
+        grep -r -i "password\s*=" src/ && echo "⚠️ Potential hardcoded password" || echo "✅ No hardcoded passwords"
+        
+        echo "Checking for tokens..."
+        grep -r -i "token\s*=" src/ && echo "⚠️ Potential hardcoded token" || echo "✅ No hardcoded tokens"
+        
+    - name: Upload security reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: security-reports
+        path: |
+          bandit-results.json
+          semgrep-results.json
+        retention-days: 30
+
+  dependency-check:
+    name: Dependency Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Check for requirements files
+      run: |
+        echo "📦 Checking for dependency files..."
+        
+        # The plugin should have minimal dependencies
+        if [ -f "requirements.txt" ]; then
+          echo "Found requirements.txt"
+          cat requirements.txt
+        else
+          echo "No requirements.txt (good - plugin should be self-contained)"
+        fi
+        
+        # Check imports in Python files
+        echo "📦 Checking imports in source files..."
+        python3 << 'EOF'
+        import ast
+        import os
+        
+        standard_libs = {
+            'json', 'http', 'time', 'calendar', 'sys', 'os', 're', 
+            'abc', 'typing', 'dataclasses', 'enum'
+        }
+        
+        third_party_imports = set()
+        
+        for root, dirs, files in os.walk('src'):
+            for file in files:
+                if file.endswith('.py'):
+                    file_path = os.path.join(root, file)
+                    with open(file_path, 'r') as f:
+                        try:
+                            tree = ast.parse(f.read())
+                            for node in ast.walk(tree):
+                                if isinstance(node, ast.Import):
+                                    for alias in node.names:
+                                        module = alias.name.split('.')[0]
+                                        if module not in standard_libs and module != 'Domoticz':
+                                            third_party_imports.add(module)
+                                elif isinstance(node, ast.ImportFrom):
+                                    if node.module:
+                                        module = node.module.split('.')[0]
+                                        if module not in standard_libs and module != 'Domoticz':
+                                            third_party_imports.add(module)
+                        except:
+                            pass
+        
+        if third_party_imports:
+            print(f"⚠️ Third-party dependencies found: {third_party_imports}")
+            print("Consider removing or documenting these dependencies")
+        else:
+            print("✅ No third-party dependencies found")
+        EOF
+        
+    - name: Check Python version compatibility
+      run: |
+        echo "🐍 Checking Python version compatibility..."
+        
+        # Check for Python 3.6+ compatibility
+        python3 << 'EOF'
+        import ast
+        import os
+        
+        issues = []
+        
+        for root, dirs, files in os.walk('src'):
+            for file in files:
+                if file.endswith('.py'):
+                    file_path = os.path.join(root, file)
+                    with open(file_path, 'r') as f:
+                        content = f.read()
+                        
+                        # Check for f-strings (Python 3.6+)
+                        if 'f"' in content or "f'" in content:
+                            continue  # f-strings are OK for 3.6+
+                        
+                        # Check for walrus operator (Python 3.8+)
+                        if ':=' in content:
+                            issues.append(f"{file_path}: Uses walrus operator (requires Python 3.8+)")
+                        
+                        # Check for positional-only parameters (Python 3.8+)
+                        if 'def ' in content and ', /' in content:
+                            issues.append(f"{file_path}: Uses positional-only parameters (requires Python 3.8+)")
+        
+        if issues:
+            print("⚠️ Python version compatibility issues:")
+            for issue in issues:
+                print(f"  {issue}")
+        else:
+            print("✅ Code appears compatible with Python 3.6+")
+        EOF
+
+  code-quality-metrics:
+    name: Code Quality Metrics
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Install quality tools
+      run: |
+        pip install radon mccabe
+        
+    - name: Calculate code complexity
+      run: |
+        echo "📊 Calculating code complexity..."
+        
+        echo "=== Cyclomatic Complexity ==="
+        radon cc src/ -a -s
+        
+        echo "=== Maintainability Index ==="
+        radon mi src/ -s
+        
+        echo "=== Raw Metrics ==="
+        radon raw src/ -s
+        
+    - name: Check code duplication
+      run: |
+        echo "📊 Checking for code duplication..."
+        
+        python3 << 'EOF'
+        import os
+        import hashlib
+        from collections import defaultdict
+        
+        def get_function_hashes(file_path):
+            """Extract function signatures and hash them."""
+            with open(file_path, 'r') as f:
+                content = f.read()
+            
+            # Simple function extraction (could be improved)
+            import re
+            functions = re.findall(r'def\s+\w+\([^)]*\):[^def]*', content, re.MULTILINE)
+            
+            hashes = []
+            for func in functions:
+                # Normalize whitespace and hash
+                normalized = re.sub(r'\s+', ' ', func.strip())
+                hash_val = hashlib.md5(normalized.encode()).hexdigest()
+                hashes.append((hash_val, func[:100] + '...' if len(func) > 100 else func))
+            
+            return hashes
+        
+        all_hashes = defaultdict(list)
+        
+        for root, dirs, files in os.walk('src'):
+            for file in files:
+                if file.endswith('.py'):
+                    file_path = os.path.join(root, file)
+                    try:
+                        hashes = get_function_hashes(file_path)
+                        for hash_val, func_preview in hashes:
+                            all_hashes[hash_val].append((file_path, func_preview))
+                    except:
+                        pass
+        
+        duplicates = {k: v for k, v in all_hashes.items() if len(v) > 1}
+        
+        if duplicates:
+            print("⚠️ Potential code duplication found:")
+            for hash_val, locations in duplicates.items():
+                print(f"  Similar functions in {len(locations)} files:")
+                for file_path, preview in locations:
+                    print(f"    {file_path}: {preview}")
+        else:
+            print("✅ No obvious code duplication found")
+        EOF
+        
+    - name: Generate quality report
+      run: |
+        echo "📊 Generating quality report..."
+        
+        cat > quality-report.md << 'EOF'
+        # Code Quality Report
+        
+        Generated: $(date)
+        
+        ## Complexity Metrics
+        ```
+        $(radon cc src/ -a -s)
+        ```
+        
+        ## Maintainability Index
+        ```
+        $(radon mi src/ -s)
+        ```
+        
+        ## Recommendations
+        - Keep cyclomatic complexity below 10
+        - Maintain high maintainability index (>20)
+        - Minimize code duplication
+        - Follow SOLID principles
+        EOF
+        
+    - name: Upload quality report
+      uses: actions/upload-artifact@v3
+      with:
+        name: quality-report
+        path: quality-report.md
+        retention-days: 30
+
+  vulnerability-database:
+    name: Update Vulnerability Database
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Create vulnerability report
+      run: |
+        echo "🛡️ Creating vulnerability report..."
+        
+        # Check for known vulnerable patterns
+        cat > vulnerability-check.py << 'EOF'
+        import os
+        import re
+        
+        # Known vulnerable patterns
+        patterns = [
+            (r'eval\s*\(', 'eval() usage - potential code injection'),
+            (r'exec\s*\(', 'exec() usage - potential code injection'),
+            (r'shell=True', 'subprocess with shell=True - potential command injection'),
+            (r'input\s*\([^)]*\)', 'input() usage - potential injection in Python 2'),
+            (r'pickle\.load', 'pickle.load() - potential deserialization attack'),
+            (r'yaml\.load\s*\([^,)]*\)', 'yaml.load() without safe loader'),
+            (r'ssl\._create_unverified_context', 'SSL context without verification'),
+        ]
+        
+        issues = []
+        
+        for root, dirs, files in os.walk('src'):
+            for file in files:
+                if file.endswith('.py'):
+                    file_path = os.path.join(root, file)
+                    with open(file_path, 'r') as f:
+                        content = f.read()
+                        
+                    for i, line in enumerate(content.split('\n'), 1):
+                        for pattern, description in patterns:
+                            if re.search(pattern, line):
+                                issues.append(f"{file_path}:{i} - {description}")
+        
+        if issues:
+            print("⚠️ Potential security issues found:")
+            for issue in issues:
+                print(f"  {issue}")
+        else:
+            print("✅ No known vulnerable patterns found")
+        EOF
+        
+        python3 vulnerability-check.py
+        
+    - name: Check for OWASP Top 10 issues
+      run: |
+        echo "🔍 Checking for OWASP Top 10 issues..."
+        
+        # This is a simplified check - in production, use proper SAST tools
+        echo "1. Injection: Checking for SQL/NoSQL/Command injection..."
+        grep -r -i "sql\|query\|command" src/ && echo "⚠️ Review database/command usage" || echo "✅ No obvious injection vectors"
+        
+        echo "2. Broken Authentication: Checking authentication handling..."
+        grep -r -i "auth\|login\|password" src/ && echo "ℹ️ Authentication code found - review implementation" || echo "✅ No authentication code"
+        
+        echo "3. Sensitive Data Exposure: Checking for sensitive data..."
+        grep -r -i "secret\|key\|token\|password" src/ && echo "⚠️ Review sensitive data handling" || echo "✅ No obvious sensitive data"
+        
+        echo "4. Security Misconfiguration: Checking configurations..."
+        grep -r -i "debug.*true\|ssl.*false" src/ && echo "⚠️ Review security configurations" || echo "✅ No obvious misconfigurations"

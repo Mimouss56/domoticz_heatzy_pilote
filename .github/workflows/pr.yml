@@ -1,0 +1,336 @@
+name: Pull Request Validation
+
+on:
+  pull_request:
+    branches: [ main, master ]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+env:
+  PYTHON_VERSION: "3.8"
+
+jobs:
+  validate-pr:
+    name: Validate Pull Request
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    
+    steps:
+    - name: Checkout PR code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        fetch-depth: 0
+        
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 black mypy pytest
+        
+    - name: Check PR title format
+      run: |
+        PR_TITLE="${{ github.event.pull_request.title }}"
+        echo "PR Title: $PR_TITLE"
+        
+        # Check if title follows conventional commits format
+        if [[ ! "$PR_TITLE" =~ ^(feat|fix|docs|style|refactor|test|chore|perf|ci|build)(\(.+\))?: .+ ]]; then
+          echo "❌ PR title should follow conventional commits format:"
+          echo "   feat: add new feature"
+          echo "   fix: fix bug"
+          echo "   docs: update documentation"
+          echo "   style: format code"
+          echo "   refactor: refactor code"
+          echo "   test: add tests"
+          echo "   chore: maintenance"
+          echo "   perf: performance improvement"
+          echo "   ci: CI/CD changes"
+          echo "   build: build system changes"
+          exit 1
+        else
+          echo "✅ PR title format is correct"
+        fi
+        
+    - name: Check for required files
+      run: |
+        # Check if any Python files were modified
+        git diff --name-only origin/${{ github.event.pull_request.base.ref }}..HEAD | grep -E '\.(py)$' > changed_files.txt || true
+        
+        if [ -s changed_files.txt ]; then
+          echo "Python files changed:"
+          cat changed_files.txt
+          
+          # If code changed, check if tests were updated
+          if ! git diff --name-only origin/${{ github.event.pull_request.base.ref }}..HEAD | grep -q test; then
+            echo "⚠️  Warning: Code changed but no test files modified"
+            echo "Please consider adding or updating tests"
+          fi
+        fi
+        
+    - name: Run quick tests
+      run: |
+        echo "Running quick validation tests..."
+        
+        # Test plugin syntax
+        python -m py_compile plugin_modular.py
+        
+        # Test all modules compile
+        for file in src/*.py; do
+          python -m py_compile "$file"
+        done
+        
+        # Run modular tests
+        python test_modular.py
+        
+    - name: Check code formatting
+      run: |
+        echo "Checking code formatting..."
+        black --check --diff src/ *.py || {
+          echo "❌ Code formatting issues found"
+          echo "Run 'black src/ *.py' to fix formatting"
+          exit 1
+        }
+        
+    - name: Run linting
+      run: |
+        echo "Running linting..."
+        flake8 src/ *.py --max-line-length=88 --extend-ignore=E203,W503 || {
+          echo "❌ Linting issues found"
+          exit 1
+        }
+        
+    - name: Check for security issues
+      run: |
+        pip install bandit
+        echo "Running security check..."
+        bandit -r src/ -f json || {
+          echo "⚠️  Security issues found, please review"
+        }
+        
+    - name: Analyze changes
+      run: |
+        echo "Analyzing changes..."
+        
+        # Count lines added/removed
+        ADDED=$(git diff --numstat origin/${{ github.event.pull_request.base.ref }}..HEAD | awk '{sum+=$1} END {print sum+0}')
+        REMOVED=$(git diff --numstat origin/${{ github.event.pull_request.base.ref }}..HEAD | awk '{sum+=$2} END {print sum+0}')
+        
+        echo "Lines added: $ADDED"
+        echo "Lines removed: $REMOVED"
+        
+        # Check if PR is too large
+        if [ $ADDED -gt 1000 ]; then
+          echo "⚠️  Large PR detected ($ADDED lines added)"
+          echo "Consider breaking this into smaller PRs"
+        fi
+        
+    - name: Check documentation
+      run: |
+        # Check if documentation was updated for significant changes
+        if git diff --name-only origin/${{ github.event.pull_request.base.ref }}..HEAD | grep -E 'src/(models|interfaces|api)\.py'; then
+          if ! git diff --name-only origin/${{ github.event.pull_request.base.ref }}..HEAD | grep -E '\.md$'; then
+            echo "⚠️  Core modules changed but no documentation updated"
+            echo "Consider updating relevant documentation"
+          fi
+        fi
+
+  test-compatibility:
+    name: Test Compatibility
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    strategy:
+      matrix:
+        python-version: ["3.6", "3.8", "3.10"]
+    
+    steps:
+    - name: Checkout PR code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        
+    - name: Test plugin compatibility
+      run: |
+        echo "Testing with Python ${{ matrix.python-version }}"
+        
+        # Test compilation
+        python -m py_compile plugin_modular.py
+        for file in src/*.py; do
+          python -m py_compile "$file"
+        done
+        
+        # Test import
+        python -c "
+        import sys
+        sys.path.insert(0, 'src')
+        from plugin_modular import create_test_plugin
+        plugin = create_test_plugin()
+        print('✅ Plugin compatible with Python ${{ matrix.python-version }}')
+        "
+        
+        # Run tests
+        python test_modular.py
+
+  performance-check:
+    name: Performance Check
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    
+    steps:
+    - name: Checkout base branch
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.base.ref }}
+        
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Benchmark base version
+      run: |
+        python3 -c "
+        import time
+        import tracemalloc
+        import sys
+        sys.path.insert(0, 'src')
+        
+        # Memory test
+        tracemalloc.start()
+        start_time = time.time()
+        
+        from plugin_modular import create_test_plugin
+        plugin = create_test_plugin()
+        
+        import_time = time.time() - start_time
+        current, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+        
+        print(f'BASE - Import time: {import_time:.3f}s, Peak memory: {peak/1024/1024:.2f}MB')
+        
+        with open('base_performance.txt', 'w') as f:
+            f.write(f'{import_time},{peak}')
+        "
+        
+    - name: Checkout PR branch
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        clean: false
+        
+    - name: Benchmark PR version
+      run: |
+        python3 -c "
+        import time
+        import tracemalloc
+        import sys
+        sys.path.insert(0, 'src')
+        
+        # Memory test
+        tracemalloc.start()
+        start_time = time.time()
+        
+        from plugin_modular import create_test_plugin
+        plugin = create_test_plugin()
+        
+        import_time = time.time() - start_time
+        current, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+        
+        print(f'PR - Import time: {import_time:.3f}s, Peak memory: {peak/1024/1024:.2f}MB')
+        
+        # Compare with base
+        with open('base_performance.txt', 'r') as f:
+            base_time, base_memory = f.read().strip().split(',')
+            base_time = float(base_time)
+            base_memory = float(base_memory)
+        
+        time_diff = ((import_time - base_time) / base_time) * 100
+        memory_diff = ((peak - base_memory) / base_memory) * 100
+        
+        print(f'Performance comparison:')
+        print(f'Import time: {time_diff:+.1f}%')
+        print(f'Memory usage: {memory_diff:+.1f}%')
+        
+        # Warn if significant regression
+        if time_diff > 20:
+            print(f'⚠️  Import time regression: {time_diff:+.1f}%')
+        if memory_diff > 20:
+            print(f'⚠️  Memory usage regression: {memory_diff:+.1f}%')
+        "
+
+  comment-pr:
+    name: Comment on PR
+    runs-on: ubuntu-latest
+    needs: [validate-pr, test-compatibility, performance-check]
+    if: always() && github.event.pull_request.draft == false
+    
+    steps:
+    - name: Comment PR results
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+          
+          // Check if we already commented
+          const botComment = comments.find(comment => 
+            comment.user.type === 'Bot' && 
+            comment.body.includes('🤖 PR Validation Results')
+          );
+          
+          const validationStatus = '${{ needs.validate-pr.result }}';
+          const compatibilityStatus = '${{ needs.test-compatibility.result }}';
+          const performanceStatus = '${{ needs.performance-check.result }}';
+          
+          let statusEmoji = '✅';
+          if (validationStatus === 'failure' || compatibilityStatus === 'failure' || performanceStatus === 'failure') {
+            statusEmoji = '❌';
+          } else if (validationStatus === 'cancelled' || compatibilityStatus === 'cancelled' || performanceStatus === 'cancelled') {
+            statusEmoji = '⚠️';
+          }
+          
+          const commentBody = `
+          ## 🤖 PR Validation Results ${statusEmoji}
+          
+          | Check | Status |
+          |-------|--------|
+          | Code Validation | ${validationStatus === 'success' ? '✅' : validationStatus === 'failure' ? '❌' : '⚠️'} |
+          | Compatibility | ${compatibilityStatus === 'success' ? '✅' : compatibilityStatus === 'failure' ? '❌' : '⚠️'} |
+          | Performance | ${performanceStatus === 'success' ? '✅' : performanceStatus === 'failure' ? '❌' : '⚠️'} |
+          
+          ${validationStatus === 'failure' ? '❌ **Code validation failed** - Please check the logs and fix the issues.' : ''}
+          ${compatibilityStatus === 'failure' ? '❌ **Compatibility tests failed** - Please ensure compatibility with all Python versions.' : ''}
+          ${performanceStatus === 'failure' ? '❌ **Performance regression detected** - Please optimize the changes.' : ''}
+          
+          ---
+          *This comment was automatically generated by the PR validation workflow.*
+          `;
+          
+          if (botComment) {
+            // Update existing comment
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: botComment.id,
+              body: commentBody
+            });
+          } else {
+            // Create new comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: commentBody
+            });
+          }
