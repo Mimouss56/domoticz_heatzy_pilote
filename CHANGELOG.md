@@ -5,6 +5,24 @@ All notable changes to the Heatzy Pilote Plugin for Domoticz will be documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **CRITICAL**: Fixed GitHub Actions failing with "Python 3.7 not found" error
+- Simplified PR workflow to avoid git branch conflicts
+- Updated test-compatibility matrix to exclude deprecated Python versions
+- Improved workflow robustness and error handling
+
+### Added
+- Added simple-ci.yml workflow for basic validation
+- Added comprehensive workflow validation scripts
+- Added MIGRATION_GUIDE.md for Python version upgrades
+
+### Changed
+- Streamlined PR validation workflow for better reliability
+- Reduced fetch-depth in checkouts to improve performance
+- Simplified performance benchmarking to avoid branch comparison issues
+
 ## [1.5.0] - 2025-10-25
 
 ### Changed

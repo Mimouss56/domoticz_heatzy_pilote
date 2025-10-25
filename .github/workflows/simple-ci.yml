@@ -1,0 +1,150 @@
+name: Simple CI Test
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  PYTHON_VERSION: "3.9"
+
+jobs:
+  quick-test:
+    name: Quick Test
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Test imports
+      run: |
+        echo "🔍 Testing plugin imports..."
+        python3 -c "
+        import sys
+        sys.path.insert(0, 'src')
+        
+        # Test all imports
+        from src import (
+            HeatMode, HeatzyDevice, AuthToken,
+            HttpClient, HeatzyApiClient,
+            DomoticzService, DeviceManager,
+            DomoticzLogger,
+            AuthenticationError, ApiError, InitializationError, SyncError
+        )
+        print('✅ All imports successful')
+        
+        # Test plugin creation
+        from plugin_modular import create_test_plugin
+        plugin = create_test_plugin()
+        print('✅ Plugin creation successful')
+        "
+        
+    - name: Run tests
+      run: |
+        echo "🧪 Running module tests..."
+        python3 test_modular.py
+        
+    - name: Validate structure
+      run: |
+        echo "🔍 Validating plugin structure..."
+        python3 -c "
+        import re
+        
+        with open('plugin_modular.py', 'r') as f:
+            content = f.read()
+        
+        required = [
+            r'<plugin.*key=.*name=.*author=.*version=.*>',
+            r'def onStart\(\):',
+            r'def onStop\(\):',
+            r'def onCommand\(',
+            r'def onHeartbeat\(\):',
+            r'global _plugin'
+        ]
+        
+        for pattern in required:
+            if not re.search(pattern, content):
+                print(f'❌ Missing: {pattern}')
+                exit(1)
+                
+        print('✅ Plugin structure is valid')
+        "
+        
+    - name: Security check
+      run: |
+        echo "🛡️  Running basic security check..."
+        python3 -c "
+        import os
+        import re
+        
+        # Check for potential security issues
+        security_patterns = [
+            r'eval\(',
+            r'exec\(',
+            r'__import__\(',
+            r'subprocess\.call\(',
+            r'os\.system\(',
+        ]
+        
+        issues = 0
+        for root, dirs, files in os.walk('src'):
+            for file in files:
+                if file.endswith('.py'):
+                    filepath = os.path.join(root, file)
+                    with open(filepath, 'r') as f:
+                        content = f.read()
+                        for pattern in security_patterns:
+                            if re.search(pattern, content):
+                                print(f'⚠️  Potential security issue in {filepath}: {pattern}')
+                                issues += 1
+        
+        if issues == 0:
+            print('✅ No obvious security issues found')
+        else:
+            print(f'⚠️  {issues} potential security issues found')
+        "
+
+  compatibility-test:
+    name: Compatibility Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11"]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        
+    - name: Test compatibility
+      run: |
+        echo "🔍 Testing Python ${{ matrix.python-version }} compatibility..."
+        
+        # Test compilation
+        python -m py_compile plugin_modular.py
+        for file in src/*.py; do
+          python -m py_compile "$file"
+        done
+        
+        # Test imports
+        python -c "
+        import sys
+        sys.path.insert(0, 'src')
+        from plugin_modular import create_test_plugin
+        plugin = create_test_plugin()
+        print('✅ Compatible with Python ${{ matrix.python-version }}')
+        "
+        
+        # Quick test run
+        python test_modular.py
