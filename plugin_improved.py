@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Improved Heatzy Pilote Plugin
+# Improved Heatzy Pilote Plugin - Applying SOLID principles
 #
-# Author: Mimouss56
+# Author: Mimouss56 (Improved version)
 #
 """
 <plugin key="heatzy_pilote" name="Heatzy pilote" author="Mimouss" version="1.0.0">
