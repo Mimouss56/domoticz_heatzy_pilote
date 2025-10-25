@@ -7,7 +7,7 @@
 # Version: 1.0.0
 #
 """
-<plugin key="heatzy_pilote" name="Heatzy pilote" author="Mimouss" version="1.5.0">
+<plugin key="heatzy_pilote" name="Heatzy pilote" author="Mimouss" version="1.6.0">
     <params>
         <param field="Mode6" label="Debug" width="75px">
             <options>
