@@ -60,7 +60,7 @@ jobs:
         grep -r -i "token\s*=" src/ && echo "⚠️ Potential hardcoded token" || echo "✅ No hardcoded tokens"
         
     - name: Upload security reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v5
       if: always()
       with:
         name: security-reports
@@ -282,7 +282,7 @@ jobs:
         EOF
         
     - name: Upload quality report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v5
       with:
         name: quality-report
         path: quality-report.md
