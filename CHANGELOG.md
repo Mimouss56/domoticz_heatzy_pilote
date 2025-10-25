@@ -5,6 +5,22 @@ All notable changes to the Heatzy Pilote Plugin for Domoticz will be documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **BREAKING**: Dropped support for Python 3.6 and 3.7
+- Updated CI/CD workflows to use Python 3.8-3.12 matrix
+- Set Python 3.9 as default version for GitHub Actions
+- Updated documentation to reflect new Python requirements
+
+### Added
+- Added PYTHON_COMPATIBILITY.md documentation
+- Enhanced error handling for unsupported Python versions
+
+### Fixed
+- Fixed GitHub Actions compatibility with Ubuntu 24.04
+- Resolved "Python 3.7 not found" CI/CD errors
+
 ## [1.3.0] - 2025-10-25
 
 ### Changed

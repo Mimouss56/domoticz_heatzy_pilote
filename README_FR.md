@@ -4,7 +4,7 @@ Ce plugin [Domoticz](https://www.domoticz.com) permet de controller des modules 
 
 ## Installation
 
-Python version 3.4 or higher est nécessaire avec Domoticz version 2021.1 ou supérieur .
+Python version 3.8 ou supérieure est nécessaire avec Domoticz version 2021.1 ou supérieur.
 
 Pour l'installer :
 * Allez dans le repertoire de Domoticz/Plugins et.
@@ -53,7 +53,9 @@ src/
 
 - Domoticz avec support Python
 - Compte Heatzy avec périphériques Pilote configurés
-- Python 3.6+ (pour les tests)
+- **Python 3.8+** (Python 3.9+ recommandé)
+
+> **Note** : Python 3.6-3.7 ne sont plus supportés en raison de leur fin de vie et de la compatibilité GitHub Actions. Voir [PYTHON_COMPATIBILITY.md](PYTHON_COMPATIBILITY.md) pour plus de détails.
 
 ## 🚀 Installation
 

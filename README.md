@@ -38,7 +38,9 @@ src/
 
 - Domoticz with Python support
 - Heatzy account with configured Pilote devices
-- Python 3.6+ (for testing)
+- **Python 3.8+** (Python 3.9+ recommended)
+
+> **Note**: Python 3.6-3.7 are no longer supported due to end-of-life status and GitHub Actions compatibility. See [PYTHON_COMPATIBILITY.md](PYTHON_COMPATIBILITY.md) for details.
 
 ## 🚀 Installation
 

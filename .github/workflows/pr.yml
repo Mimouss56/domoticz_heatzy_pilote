@@ -6,7 +6,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
 
 env:
-  PYTHON_VERSION: "3.8"
+  PYTHON_VERSION: "3.9"
 
 jobs:
   validate-pr:
